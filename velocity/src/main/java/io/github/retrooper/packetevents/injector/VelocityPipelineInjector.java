@@ -64,6 +64,7 @@ public class VelocityPipelineInjector implements ChannelInjector {
             SERVER_INITIALIZER_HOLDER_CLASS = Reflection.getClassByNameWithoutException("com.velocitypowered.proxy.network.ServerChannelInitializerHolder");
             BACKEND_INITIALIZER_HOLDER_CLASS = Reflection.getClassByNameWithoutException("com.velocitypowered.proxy.network.BackendChannelInitializerHolder");
             SET_SERVER_INTIIALIZER = Reflection.getMethod(SERVER_INITIALIZER_HOLDER_CLASS, 0, ChannelInitializer.class);
+            SET_BACKEND_INITIALIZER = Reflection.getMethod(BACKEND_INITIALIZER_HOLDER_CLASS, 0, ChannelInitializer.class);
         }
         Supplier<ChannelInitializer<Channel>> initializerHolder = getServerChannelInitializerHolder();
         ChannelInitializer<Channel> wrappedProxyInitializer = initializerHolder.get();
@@ -71,20 +72,25 @@ public class VelocityPipelineInjector implements ChannelInjector {
         try {
             SET_SERVER_INTIIALIZER.invoke(initializerHolder, initializer);
         } catch (IllegalAccessException | InvocationTargetException e) {
-            e.printStackTrace();
+            throw new IllegalStateException("Failed to inject the frontend initializer", e);
         }
-        //TODO Do we also register in backend initializer?
-       /* Object backendInitializerHolder = reflectConnectionManager.readObject(0, BACKEND_INITIALIZER_HOLDER_CLASS);
-        ChannelInitializer<Channel> wrappedBackendInitializer = ((Supplier<ChannelInitializer<Channel>>) backendInitializerHolder).get();
+        final Supplier<ChannelInitializer<Channel>> backendInitializerHolder = getBackendChannelInitializerHolder();
         try {
-            SET_BACKEND_INITIALIZER.invoke(backendInitializerHolder, new VelocityChannelInitializer(wrappedBackendInitializer));
-        } catch (IllegalAccessException | InvocationTargetException e) {
-            e.printStackTrace();
-        }*/
+            SET_BACKEND_INITIALIZER.invoke(backendInitializerHolder,
+                    new VelocityBackendChannelInitializer(backendInitializerHolder.get()));
+        } catch (ReflectiveOperationException e) {
+            try {
+                SET_SERVER_INTIIALIZER.invoke(initializerHolder, wrappedProxyInitializer);
+            } catch (ReflectiveOperationException rollbackFailure) {
+                e.addSuppressed(rollbackFailure);
+            }
+            throw new IllegalStateException("Failed to inject the backend initializer", e);
+        }
     }
 
     @Override
     public void uninject() {
+        uninjectBackend();
         Supplier<ChannelInitializer<Channel>> holder = this.getServerChannelInitializerHolder();
         ChannelInitializer<?> wrapper = holder.get();
         CheckedConsumer<ChannelInitializer<Channel>, ReflectiveOperationException> uninjector = (initializer) -> {
@@ -162,5 +168,35 @@ public class VelocityPipelineInjector implements ChannelInjector {
         Object connectionManager = reflectServer.readObject(0, CONNECTION_MANAGER_CLASS);
         ReflectionObject reflectConnectionManager = new ReflectionObject(connectionManager);
         return (Supplier<ChannelInitializer<Channel>>) reflectConnectionManager.readObject(0, SERVER_INITIALIZER_HOLDER_CLASS);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Supplier<ChannelInitializer<Channel>> getBackendChannelInitializerHolder() {
+        final ReflectionObject reflectServer = new ReflectionObject(server);
+        final Object connectionManager = reflectServer.readObject(0, CONNECTION_MANAGER_CLASS);
+        return (Supplier<ChannelInitializer<Channel>>) new ReflectionObject(connectionManager)
+                .readObject(0, BACKEND_INITIALIZER_HOLDER_CLASS);
+    }
+
+    private void uninjectBackend() {
+        final Supplier<ChannelInitializer<Channel>> holder = getBackendChannelInitializerHolder();
+        ChannelInitializer<?> wrapper = holder.get();
+        CheckedConsumer<ChannelInitializer<Channel>, ReflectiveOperationException> restore =
+                initializer -> SET_BACKEND_INITIALIZER.invoke(holder, initializer);
+        try {
+            while (!(wrapper instanceof VelocityBackendChannelInitializer)) {
+                final Field field = Reflection.getField(wrapper.getClass(), ChannelInitializer.class, 0);
+                if (field == null) {
+                    throw new IllegalStateException("Can't unwrap backend initializer: " + wrapper);
+                }
+                field.setAccessible(true);
+                final ChannelInitializer<?> outer = wrapper;
+                wrapper = (ChannelInitializer<?>) field.get(outer);
+                restore = initializer -> field.set(outer, initializer);
+            }
+            restore.accept(((VelocityBackendChannelInitializer) wrapper).getWrappedInitializer());
+        } catch (ReflectiveOperationException exception) {
+            throw new IllegalStateException("Failed to uninject the backend initializer", exception);
+        }
     }
 }

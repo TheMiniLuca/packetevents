@@ -20,6 +20,12 @@ dependencies {
     shadow(project(":api", "shadow"))
     shadow(project(":netty-common"))
     compileShadowOnly(libs.bstats.velocity)
+    testImplementation(libs.netty)
+    testImplementation(libs.velocity)
+    testImplementation(libs.bundles.adventure)
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.2")
+    testImplementation("org.mockito:mockito-core:5.22.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.2")
     // Velocity already bundles with adventure
 }
 
@@ -30,8 +36,11 @@ configure<JavaPluginExtension> {
 }
 
 tasks {
+    test { useJUnitPlatform() }
+    compileTestJava { options.release = 25 }
     named<RunVelocity>("runVelocity") {
         velocityVersion("4.1.1")
+        jvmArgs("-Dnet.kyori.ansi.colorLevel=indexed16")
         runDirectory = rootDir.resolve("run/velocity/")
 
         javaLauncher = project.javaToolchains.launcherFor {
