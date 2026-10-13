@@ -55,7 +55,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class BackendPacketSessionTest {
-    private static final ClientVersion VERSION = ClientVersion.V_1_21_11;
+    private static final ClientVersion VERSION = ClientVersion.V_26_3;
     private final List<EmbeddedChannel> channels = new ArrayList<>();
     private final List<ProtocolPacketEvent> packets = new ArrayList<>();
     private PacketEventsAPI<?> api;

@@ -39,7 +39,7 @@ tasks {
     test { useJUnitPlatform() }
     compileTestJava { options.release = 25 }
     named<RunVelocity>("runVelocity") {
-        velocityVersion("4.1.1")
+        velocityVersion("4.2.0")
         jvmArgs("-Dnet.kyori.ansi.colorLevel=indexed16")
         runDirectory = rootDir.resolve("run/velocity/")
 

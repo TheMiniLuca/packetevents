@@ -48,7 +48,7 @@ rewriting, protocol transitions, and Identity's backend chat handling.
 .\gradlew.bat :velocity:test :velocity:shadowJar --configure-on-demand
 ```
 
-Requires JDK 25, matching the upstream Velocity module. The shaded plugin is written to
+Requires JDK 25 and targets Velocity 4.2.0. Backend tests use Minecraft 26.3 (protocol 777). The shaded plugin is written to
 `build/libs/packetevents-velocity-2.14.1-SNAPSHOT.jar`.
 
 EmbeddedChannel tests cover backend/frontend isolation, per-channel state, packet rewriting,
