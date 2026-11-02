@@ -17,8 +17,8 @@ dependencies {
     compileOnly(libs.netty)
     compileOnly(libs.velocity)
     annotationProcessor(libs.velocity)
-    shadow(project(":api", "shadow"))
-    shadow(project(":netty-common"))
+    shadow(project(":api", "shadow")) { isTransitive = false }
+    shadow(project(":netty-common")) { isTransitive = false }
     compileShadowOnly(libs.bstats.velocity)
     testImplementation(libs.netty)
     testImplementation(libs.velocity)

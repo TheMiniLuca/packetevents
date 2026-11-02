@@ -96,7 +96,7 @@ public class CustomClickEventTest extends BaseDummyAPITest {
 
         // Verify the deserialized component has the click event
         assertNotNull(deserialized.clickEvent(), "Click event should be present after deserialization");
-        assertEquals(ClickEvent.Action.CUSTOM, deserialized.clickEvent().action());
+        assertEquals(ClickEvent.Action.NAMES.value("custom"), deserialized.clickEvent().action());
 
         // Verify the payload is preserved
         ClickEvent.Payload payload = deserialized.clickEvent().payload();
@@ -164,6 +164,6 @@ public class CustomClickEventTest extends BaseDummyAPITest {
 
         // Verify the deserialized component has the click event
         assertNotNull(deserialized.clickEvent(), "Click event should be present after deserialization");
-        assertEquals(ClickEvent.Action.CUSTOM, deserialized.clickEvent().action());
+        assertEquals(ClickEvent.Action.NAMES.value("custom"), deserialized.clickEvent().action());
     }
 }

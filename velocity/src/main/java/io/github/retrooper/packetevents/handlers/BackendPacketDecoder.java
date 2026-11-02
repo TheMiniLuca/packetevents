@@ -60,7 +60,10 @@ public final class BackendPacketDecoder extends ChannelInboundHandlerAdapter {
 
     @Override
     public void userEventTriggered(final ChannelHandlerContext context, final Object event) throws Exception {
-        // Velocity inserts compression codecs dynamically. Keep interception on their decoded side.
+        // Let ViaVersion finish relocating before moving our own context. Forwarding from a
+        // removed context can otherwise revisit the relocated Via/PacketEvents handlers forever.
+        // This stays synchronous, so the next packet already uses the final decoded-side order.
+        context.fireUserEventTriggered(event);
         if (event instanceof Enum && ((Enum<?>) event).name().equals("COMPRESSION_ENABLED")) {
             final BackendPacketEncoder encoder = (BackendPacketEncoder)
                     context.pipeline().remove(BackendPacketEncoder.NAME);
@@ -68,7 +71,6 @@ public final class BackendPacketDecoder extends ChannelInboundHandlerAdapter {
             context.pipeline().remove(this);
             context.pipeline().addBefore("minecraft-decoder", NAME, this);
         }
-        context.fireUserEventTriggered(event);
     }
 
     @Override
