@@ -28,6 +28,7 @@ import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.protocol.player.User;
 import com.github.retrooper.packetevents.protocol.player.UserProfile;
 import com.github.retrooper.packetevents.util.EventCreationUtil;
+import com.github.retrooper.packetevents.netty.buffer.ByteBufHelper;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
 import com.github.retrooper.packetevents.wrapper.handshaking.client.WrapperHandshakingClientHandshake;
 import com.velocitypowered.api.proxy.Player;
@@ -36,6 +37,7 @@ import io.github.retrooper.packetevents.velocity.event.VelocityBackendDisconnect
 import io.github.retrooper.packetevents.velocity.event.VelocityBackendPacketEvent;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
+import java.util.Optional;
 import org.jetbrains.annotations.Nullable;
 
 /** Owned by one backend channel/event loop. Never registered in ProtocolManager's player maps. */
@@ -43,6 +45,8 @@ final class BackendPacketSession {
     private final Channel channel;
     private @Nullable ServerConnection connection;
     private @Nullable User user;
+    private boolean reconfiguring;
+    private boolean reportedLateCleanup;
 
     BackendPacketSession(final Channel channel) {
         this.channel = channel;
@@ -66,6 +70,23 @@ final class BackendPacketSession {
             this.user = new User(this.channel, ConnectionState.HANDSHAKING,
                     ClientVersion.getById(player.getProtocolVersion().getProtocol()),
                     new UserProfile(player.getUniqueId(), player.getUsername()));
+        }
+
+        if (side == PacketSide.SERVER) {
+            final Optional<ConnectionState> actual = BackendProtocolState.clientbound(this.channel);
+            if (actual.isPresent() && actual.get() != this.user.getEncoderState()) {
+                this.user.setEncoderState(actual.get());
+                if (actual.get() != ConnectionState.CONFIGURATION) this.reconfiguring = false;
+            }
+            if (this.isLateWorldCleanup(buffer)) {
+                if (!this.reportedLateCleanup) {
+                    PacketEvents.getAPI().getLogManager().warn("Discarding late entity removal from "
+                            + this.connection.getServerInfo().getName()
+                            + " after configuration started; the previous client world has been retired");
+                    this.reportedLateCleanup = true;
+                }
+                return false;
+            }
         }
 
         final int start = buffer.readerIndex();
@@ -99,6 +120,14 @@ final class BackendPacketSession {
         return true;
     }
 
+    private boolean isLateWorldCleanup(final ByteBuf buffer) {
+        if (!this.reconfiguring || this.user.getEncoderState() != ConnectionState.CONFIGURATION) return false;
+        final int id = ByteBufHelper.readVarInt(buffer.duplicate());
+        final ClientVersion version = this.user.getClientVersion();
+        return id == PacketType.Play.Server.DESTROY_ENTITIES.getId(version)
+                && PacketType.getById(PacketSide.SERVER, ConnectionState.CONFIGURATION, version, id) == null;
+    }
+
     private void advanceState(final ProtocolPacketEvent packet) {
         final User backendUser = packet.getUser();
         if (packet.getPacketType() == PacketType.Handshaking.Client.HANDSHAKE) {
@@ -116,8 +145,11 @@ final class BackendPacketSession {
                 || packet.getPacketType() == PacketType.Play.Client.CONFIGURATION_ACK) {
             backendUser.setDecoderState(ConnectionState.CONFIGURATION);
         } else if (packet.getPacketType() == PacketType.Play.Server.CONFIGURATION_START) {
+            this.reconfiguring = true;
+            this.reportedLateCleanup = false;
             backendUser.setEncoderState(ConnectionState.CONFIGURATION);
         } else if (packet.getPacketType() == PacketType.Configuration.Server.CONFIGURATION_END) {
+            this.reconfiguring = false;
             backendUser.setEncoderState(ConnectionState.PLAY);
         } else if (packet.getPacketType() == PacketType.Configuration.Client.CONFIGURATION_END_ACK) {
             backendUser.setDecoderState(ConnectionState.PLAY);

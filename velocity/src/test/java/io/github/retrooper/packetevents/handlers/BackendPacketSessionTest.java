@@ -195,6 +195,127 @@ class BackendPacketSessionTest {
         assertNull(channel.readOutbound());
     }
 
+    @Test
+    @DisplayName("Velocity가 PLAY인데 포크만 CONFIGURATION에 남아도 엔티티 제거를 정상 해석한다")
+    void followsNativeClientboundStateAfterMissedTransition() {
+        final EmbeddedChannel channel = channel();
+        enterPlay(channel);
+        final var decoder = new NativeDecoder(NativeState.PLAY);
+        channel.pipeline().replace("minecraft-decoder", "minecraft-decoder", decoder);
+        final var user = this.packets.get(0).getUser();
+        user.setEncoderState(ConnectionState.CONFIGURATION);
+        final ByteBuf removal = packet(PacketType.Play.Server.DESTROY_ENTITIES).writeByte(0);
+        assertTrue(channel.writeInbound(removal));
+        ((ByteBuf) channel.readInbound()).release();
+        assertEquals(ConnectionState.PLAY, user.getEncoderState());
+        assertEquals(PacketType.Play.Server.DESTROY_ENTITIES, this.packets.get(this.packets.size() - 1).getPacketType());
+        assertEquals(0, removal.refCnt());
+    }
+
+    @Test
+    @DisplayName("재설정 시작 뒤 늦게 도착한 이전 월드의 엔티티 제거는 클라이언트로 보내지 않는다")
+    void discardsLateWorldCleanupOnlyDuringReconfiguration() {
+        final EmbeddedChannel channel = channel();
+        enterPlay(channel);
+        channel.writeInbound(packet(PacketType.Play.Server.CONFIGURATION_START));
+        ((ByteBuf) channel.readInbound()).release();
+        for (int i = 0; i < 2; i++) {
+            final ByteBuf removal = packet(PacketType.Play.Server.DESTROY_ENTITIES).writeByte(0);
+            assertFalse(channel.writeInbound(removal));
+            assertEquals(0, removal.refCnt());
+        }
+        verify(this.api.getLogManager()).warn(contains("Discarding late entity removal"));
+        send(channel, PacketType.Play.Client.CONFIGURATION_ACK);
+        channel.writeInbound(packet(PacketType.Configuration.Server.CONFIGURATION_END));
+        ((ByteBuf) channel.readInbound()).release();
+        send(channel, PacketType.Configuration.Client.CONFIGURATION_END_ACK);
+        assertTrue(channel.writeInbound(packet(PacketType.Play.Server.DESTROY_ENTITIES).writeByte(0)));
+        ((ByteBuf) channel.readInbound()).release();
+    }
+
+    @Test
+    @DisplayName("실제 Velocity 설정 상태는 PLAY와 번호가 겹치는 패킷도 설정 패킷으로 해석한다")
+    void followsNativeConfigurationWithoutGuessingPacketIds() {
+        final EmbeddedChannel channel = channel();
+        enterPlay(channel);
+        final var decoder = new NativeDecoder(NativeState.CONFIG);
+        channel.pipeline().replace("minecraft-decoder", "minecraft-decoder", decoder);
+        assertTrue(channel.writeInbound(packet(PacketType.Configuration.Server.PLUGIN_MESSAGE)));
+        ((ByteBuf) channel.readInbound()).release();
+        assertEquals(PacketType.Configuration.Server.PLUGIN_MESSAGE, this.packets.get(this.packets.size() - 1).getPacketType());
+        decoder.state = NativeState.PLAY;
+        assertTrue(channel.writeInbound(packet(PacketType.Play.Server.DESTROY_ENTITIES).writeByte(0)));
+        ((ByteBuf) channel.readInbound()).release();
+        assertEquals(PacketType.Play.Server.DESTROY_ENTITIES, this.packets.get(this.packets.size() - 1).getPacketType());
+    }
+
+    @Test
+    @DisplayName("최초 로그인 설정 중의 잘못된 PLAY 패킷은 재설정 정리로 오인하지 않는다")
+    void doesNotHideInvalidPlayPacketsDuringInitialConfiguration() {
+        final EmbeddedChannel channel = channel();
+        handshake(channel);
+        channel.writeInbound(packet(PacketType.Login.Server.LOGIN_SUCCESS));
+        ((ByteBuf) channel.readInbound()).release();
+        final ByteBuf invalid = packet(PacketType.Play.Server.DESTROY_ENTITIES).writeByte(0);
+        final var failure = assertThrows(com.github.retrooper.packetevents.exception.PacketProcessException.class,
+                () -> channel.writeInbound(invalid));
+        assertTrue(failure.getMessage().contains("Connection state: CONFIGURATION"));
+        assertEquals(0, invalid.refCnt());
+    }
+
+    @Test
+    @DisplayName("취소된 서버행 설정 완료 응답은 상대방 수신 상태를 PLAY로 바꾸지 않는다")
+    void cancelledServerboundAcknowledgementDoesNotAdvanceRemoteState() {
+        final EmbeddedChannel channel = channel();
+        handshake(channel);
+        channel.writeInbound(packet(PacketType.Login.Server.LOGIN_SUCCESS));
+        ((ByteBuf) channel.readInbound()).release();
+        send(channel, PacketType.Login.Client.LOGIN_SUCCESS_ACK);
+        this.events.registerListener(new PacketListenerAbstract() {
+            @Override
+            public void onPacketEventExternal(final PacketEvent event) {
+                if (event instanceof VelocityBackendPacketEvent backend
+                        && backend.getPacket().getPacketType() == PacketType.Configuration.Client.CONFIGURATION_END_ACK) {
+                    backend.setCancelled(true);
+                }
+            }
+        });
+        final ByteBuf acknowledgement = packet(PacketType.Configuration.Client.CONFIGURATION_END_ACK);
+        assertFalse(channel.writeOutbound(acknowledgement));
+        assertEquals(0, acknowledgement.refCnt());
+        assertEquals(ConnectionState.CONFIGURATION, this.packets.get(0).getUser().getDecoderState());
+    }
+
+    @Test
+    @DisplayName("재설정 중에도 이전 월드 정리가 아닌 알 수 없는 패킷은 오류로 남긴다")
+    void doesNotSuppressUnrelatedUnknownPacketsDuringReconfiguration() {
+        final EmbeddedChannel channel = channel();
+        enterPlay(channel);
+        channel.writeInbound(packet(PacketType.Play.Server.CONFIGURATION_START));
+        ((ByteBuf) channel.readInbound()).release();
+        final ByteBuf invalid = Unpooled.buffer().writeByte(127);
+        assertThrows(com.github.retrooper.packetevents.exception.PacketProcessException.class,
+                () -> channel.writeInbound(invalid));
+        assertEquals(0, invalid.refCnt());
+    }
+
+    private void enterPlay(final EmbeddedChannel channel) {
+        handshake(channel);
+        channel.writeInbound(packet(PacketType.Login.Server.LOGIN_SUCCESS));
+        ((ByteBuf) channel.readInbound()).release();
+        send(channel, PacketType.Login.Client.LOGIN_SUCCESS_ACK);
+        channel.writeInbound(packet(PacketType.Configuration.Server.CONFIGURATION_END));
+        ((ByteBuf) channel.readInbound()).release();
+        send(channel, PacketType.Configuration.Client.CONFIGURATION_END_ACK);
+    }
+
+    private enum NativeState { PLAY, CONFIG }
+
+    private static final class NativeDecoder extends ChannelInboundHandlerAdapter {
+        private NativeState state;
+        private NativeDecoder(final NativeState state) { this.state = state; }
+    }
+
     private EmbeddedChannel channel() {
         final Player player = mock(Player.class);
         when(player.getUniqueId()).thenReturn(UUID.randomUUID());
@@ -202,6 +323,7 @@ class BackendPacketSessionTest {
         when(player.getProtocolVersion()).thenReturn(ProtocolVersion.MINECRAFT_1_21_11);
         final ServerConnection connection = mock(ServerConnection.class);
         when(connection.getPlayer()).thenReturn(player);
+        when(connection.getServerInfo()).thenReturn(new com.velocitypowered.api.proxy.server.ServerInfo("backend-test", new java.net.InetSocketAddress("127.0.0.1", 25566)));
         final EmbeddedChannel channel = new EmbeddedChannel();
         channel.pipeline().addLast("minecraft-decoder", new ChannelInboundHandlerAdapter());
         channel.pipeline().addLast("minecraft-encoder", new ChannelOutboundHandlerAdapter());
