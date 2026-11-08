@@ -93,21 +93,23 @@ class BackendPacketCompressionTest {
                 assertEquals(attempt + 1,eventCount.get());
                 final var names = pipeline.names();
                 assertTrue(names.indexOf("compression-decoder") < names.indexOf("via-decoder"));
-                assertTrue(names.indexOf("via-decoder") < names.indexOf(BackendPacketDecoder.NAME));
+                assertTrue(names.indexOf("compression-decoder") < names.indexOf(BackendPacketDecoder.NAME));
+                assertTrue(names.indexOf(BackendPacketDecoder.NAME) < names.indexOf("via-decoder"));
                 assertTrue(names.indexOf("compression-encoder") < names.indexOf("via-encoder"));
-                assertTrue(names.indexOf("via-encoder") < names.indexOf(BackendPacketEncoder.NAME));
+                assertTrue(names.indexOf("compression-encoder") < names.indexOf(BackendPacketEncoder.NAME));
+                assertTrue(names.indexOf(BackendPacketEncoder.NAME) < names.indexOf("via-encoder"));
                 calls.clear();
                 final var inbound = Unpooled.buffer().writeByte(1);
                 assertTrue(channel.writeInbound(inbound));
                 ((ByteBuf)channel.readInbound()).release();
                 assertEquals(0,inbound.refCnt());
-                assertEquals(List.of("inflate","via-in","packet-SERVER","minecraft-decode"),calls);
+                assertEquals(List.of("inflate","packet-SERVER","via-in","minecraft-decode"),calls);
                 calls.clear();
                 final var outbound = Unpooled.buffer().writeByte(2);
                 assertTrue(channel.writeOutbound(outbound));
                 ((ByteBuf)channel.readOutbound()).release();
                 assertEquals(0,outbound.refCnt());
-                assertEquals(List.of("minecraft-encode","packet-CLIENT","via-out","deflate"),calls);
+                assertEquals(List.of("minecraft-encode","via-out","packet-CLIENT","deflate"),calls);
             }
             final var before = List.copyOf(pipeline.names());
             pipeline.fireUserEventTriggered(Event.OTHER); channel.checkException();

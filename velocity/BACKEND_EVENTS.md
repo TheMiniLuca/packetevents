@@ -32,6 +32,14 @@ configuration, play transitions, and compression-handler relocation are handled 
 Velocity `Player` profile is not changed. Backend pings without a `ServerConnection` association
 pass through normally.
 
+When ViaVersion is present on Velocity, backend interception stays on the **server wire side** of
+`via-decoder` / `via-encoder`, after decompression and before compression. Incoming packets are
+observed before translation to the player's version; outgoing packets are observed after translation
+to the backend version. This boundary applies both at initial injection and after every
+`COMPRESSION_ENABLED` relocation. Without ViaVersion, the Minecraft codecs remain the anchors.
+Compression events are forwarded before moving the PacketEvents contexts so ViaVersion can finish
+its synchronous relocation without repeating or cycling the event.
+
 Callbacks run on the channel event loop and are synchronous. Complete database/network lookups
 before the channel is opened, for example by awaiting `ServerPreConnectEvent`. Identity snapshots
 the selected profile when the backend handshake starts. Consumers doing critical rewriting must
@@ -54,3 +62,8 @@ Requires JDK 25 and targets Velocity 4.2.0. Backend tests use Minecraft 26.3 (pr
 EmbeddedChannel tests cover backend/frontend isolation, per-channel state, packet rewriting,
 compression relocation, and cancellation/reference-count cleanup. Identity's separate integration
 runner exercises actual Paper and Velocity deployments with and without backend plugins.
+The cross-version boundary tests pass 1.21.11 signed chat and commands through an explicit packet-ID
+translation fixture and decode the result with the real 26.3 PacketEvents wrappers. They include the
+283-byte chat samples that previously produced signature overreads and `2464 > 64` argument lengths,
+plus clientbound KeepAlive and repeated compression events. The translation fixture is not a complete
+ViaVersion runtime or a claim of end-to-end live compatibility.

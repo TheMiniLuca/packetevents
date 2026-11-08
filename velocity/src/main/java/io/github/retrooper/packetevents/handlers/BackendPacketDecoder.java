@@ -62,14 +62,10 @@ public final class BackendPacketDecoder extends ChannelInboundHandlerAdapter {
     public void userEventTriggered(final ChannelHandlerContext context, final Object event) throws Exception {
         // Let ViaVersion finish relocating before moving our own context. Forwarding from a
         // removed context can otherwise revisit the relocated Via/PacketEvents handlers forever.
-        // This stays synchronous, so the next packet already uses the final decoded-side order.
+        // This stays synchronous, so the next packet already uses the final server-wire order.
         context.fireUserEventTriggered(event);
         if (event instanceof Enum && ((Enum<?>) event).name().equals("COMPRESSION_ENABLED")) {
-            final BackendPacketEncoder encoder = (BackendPacketEncoder)
-                    context.pipeline().remove(BackendPacketEncoder.NAME);
-            context.pipeline().addBefore("minecraft-encoder", BackendPacketEncoder.NAME, encoder);
-            context.pipeline().remove(this);
-            context.pipeline().addBefore("minecraft-decoder", NAME, this);
+            BackendPacketHandlers.relocate(context.pipeline(), this);
         }
     }
 
