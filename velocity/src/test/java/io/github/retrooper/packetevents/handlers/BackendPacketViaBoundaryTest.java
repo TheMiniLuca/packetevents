@@ -29,12 +29,15 @@ import com.github.retrooper.packetevents.event.PacketListenerAbstract;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
 import com.github.retrooper.packetevents.event.PacketSendEvent;
 import com.github.retrooper.packetevents.protocol.ConnectionState;
+import com.github.retrooper.packetevents.protocol.chat.RemoteChatSession;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.packettype.PacketTypeCommon;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
+import com.github.retrooper.packetevents.protocol.player.PublicProfileKey;
 import com.github.retrooper.packetevents.settings.PacketEventsSettings;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientChatCommand;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientChatMessage;
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientChatSessionUpdate;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerKeepAlive;
 import com.velocitypowered.api.network.ProtocolVersion;
 import com.velocitypowered.api.proxy.Player;
@@ -52,6 +55,8 @@ import io.netty.channel.ChannelPromise;
 import io.netty.channel.embedded.EmbeddedChannel;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyPairGenerator;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -92,6 +97,11 @@ class BackendPacketViaBoundaryTest {
                     observed.add(command.getCommand());
                 } else if (packet.getPacketType() == PacketType.Play.Client.CHAT_MESSAGE) {
                     observed.add(new WrapperPlayClientChatMessage((PacketReceiveEvent) packet).getMessage());
+                } else if (packet.getPacketType() == PacketType.Play.Client.CHAT_SESSION_UPDATE) {
+                    final var session = new WrapperPlayClientChatSessionUpdate((PacketReceiveEvent) packet).getChatSession();
+                    assertEquals(new UUID(0x0100000000000000L, 0), session.getSessionId());
+                    assertEquals(256, session.getPublicProfileKey().getKeySignature().length);
+                    observed.add("session");
                 } else if (packet.getPacketType() == PacketType.Play.Server.KEEP_ALIVE) {
                     assertEquals(42, new WrapperPlayServerKeepAlive((PacketSendEvent) packet).getId());
                     observed.add("keepalive");
@@ -106,6 +116,39 @@ class BackendPacketViaBoundaryTest {
     void cleanup() {
         for (final var channel : channels) channel.finishAndReleaseAll();
         PacketEvents.setAPI(null);
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    @DisplayName("채팅을 보내기 전 1.21.11 접속 세션 갱신을 26.3 일반 채팅으로 오인하지 않는다")
+    void initialChatSessionIsNotMisclassifiedAsChat(final boolean compressed) throws Exception {
+        // The old client session ID collides with modern chat; reading it on the wrong side
+        // of ViaVersion makes Identity compare a certificate packet with its chat cache.
+        assertEquals(PacketType.Play.Client.CHAT_MESSAGE.getId(BACKEND),
+                PacketType.Play.Client.CHAT_SESSION_UPDATE.getId(CLIENT));
+        final var channel = channel(PacketType.Play.Client.CHAT_SESSION_UPDATE);
+        if (compressed) compress(channel);
+        final var generator = KeyPairGenerator.getInstance("RSA");
+        generator.initialize(2048);
+        final var key = generator.generateKeyPair();
+        final var packet = new WrapperPlayClientChatSessionUpdate(new RemoteChatSession(
+                new UUID(0x0100000000000000L, 0),
+                new PublicProfileKey(Instant.parse("2026-11-02T05:00:00Z"), key.getPublic(), new byte[256])));
+        final var input = Unpooled.buffer();
+        packet.setClientVersion(CLIENT);
+        packet.setServerVersion(CLIENT.toServerVersion());
+        packet.setBuffer(input);
+        packet.writeVarInt(PacketType.Play.Client.CHAT_SESSION_UPDATE.getId(CLIENT));
+        packet.write();
+        assertTrue(channel.writeOutbound(input));
+        final ByteBuf output = channel.readOutbound();
+        try {
+            assertEquals(PacketType.Play.Client.CHAT_SESSION_UPDATE.getId(BACKEND), output.readUnsignedByte());
+        } finally {
+            output.release();
+        }
+        assertEquals(0, input.refCnt());
+        assertEquals(List.of("session"), observed);
     }
 
     @ParameterizedTest
