@@ -48,7 +48,7 @@ final class NBTLegacyHoverEventSerializerImpl implements LegacyHoverEventSeriali
             // added in 4.22.0
             io = TagStringIO.tagStringIO();
         } catch (Throwable ignored) {
-            io = TagStringIO.get();
+            io = TagStringIO.tagStringIO();
         }
         SNBT_IO = io;
     }

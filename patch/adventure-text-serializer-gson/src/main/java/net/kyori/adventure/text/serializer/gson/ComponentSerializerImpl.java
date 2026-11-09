@@ -279,11 +279,7 @@ final class ComponentSerializerImpl extends TypeAdapter<Component> {
             TranslatableComponent.Builder i18nBuilder;
             builder = i18nBuilder = Component.translatable().key(translate);
             if (translateWith != null) {
-                if (BackwardCompatUtil.IS_4_15_0_OR_NEWER) {
-                    i18nBuilder.arguments(translateWith);
-                } else {
-                    i18nBuilder.args(translateWith);
-                }
+                i18nBuilder.arguments(translateWith);
             }
             if (BackwardCompatUtil.IS_4_13_0_OR_NEWER) {
                 i18nBuilder.fallback(translateFallback);
@@ -328,7 +324,7 @@ final class ComponentSerializerImpl extends TypeAdapter<Component> {
         return BackwardCompatUtil.build(builder); // packetevents patch
     }
 
-    private static <C extends NBTComponent<C, B>, B extends NBTComponentBuilder<C, B>> B nbt(final B builder, final String nbt, final boolean interpret, final @Nullable Component separator) {
+    private static <C extends NBTComponent<C>, B extends NBTComponentBuilder<C, B>> B nbt(final B builder, final String nbt, final boolean interpret, final @Nullable Component separator) {
         return builder
                 .nbtPath(nbt)
                 .interpret(interpret)
@@ -379,18 +375,13 @@ final class ComponentSerializerImpl extends TypeAdapter<Component> {
                     out.value(fallback);
                 }
             }
-            boolean argsPresent;
-            if (BackwardCompatUtil.IS_4_15_0_OR_NEWER) {
-                argsPresent = !translatable.arguments().isEmpty();
-            } else {
-                argsPresent = !translatable.args().isEmpty();
-            }
+            final boolean argsPresent = !translatable.arguments().isEmpty();
             if (argsPresent) {
                 out.name(TRANSLATE_WITH);
                 if (BackwardCompatUtil.IS_4_15_0_OR_NEWER) {
                     this.gson.toJson(translatable.arguments(), TRANSLATABLE_ARGUMENT_LIST_TYPE, out);
                 } else {
-                    this.gson.toJson(translatable.args(), COMPONENT_LIST_TYPE, out);
+                    this.gson.toJson(translatable.arguments(), COMPONENT_LIST_TYPE, out);
                 }
             }
             // packetevents patch end
@@ -416,7 +407,7 @@ final class ComponentSerializerImpl extends TypeAdapter<Component> {
             out.name(KEYBIND);
             out.value(((KeybindComponent) value).keybind());
         } else if (value instanceof NBTComponent) {
-            final NBTComponent<?, ?> nbt = (NBTComponent<?, ?>) value;
+            final NBTComponent<?> nbt = (NBTComponent<?>) value;
             out.name(NBT);
             out.value(nbt.nbtPath());
             out.name(NBT_INTERPRET);

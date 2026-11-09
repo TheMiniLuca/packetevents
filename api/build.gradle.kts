@@ -32,6 +32,7 @@ dependencies {
     }
     compileOnly(libs.gson)
     compileOnly(libs.adventure.text.logger.slf4j)
+    compileOnly(libs.slf4j.api)
     compileOnly(libs.checkerqual)
 
     testRuntimeOnly(testlibs.bundles.adventure)

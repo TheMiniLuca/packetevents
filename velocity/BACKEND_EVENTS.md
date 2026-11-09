@@ -56,7 +56,12 @@ rewriting, protocol transitions, and Identity's backend chat handling.
 .\gradlew.bat :velocity:test :velocity:shadowJar --configure-on-demand
 ```
 
-Requires JDK 25 and targets Velocity 4.2.0. Backend tests use Minecraft 26.3 (protocol 777). The shaded plugin is written to
+Requires JDK 25 for the build and targets Velocity 4.2.0 with its Adventure 5.2.0 API.
+Library and serializer bytecode targets Java 21, Adventure 5's minimum. This fork no longer
+targets Adventure 4 hosts. Building the bundled serializers against Adventure 5 is required:
+`ClickEvent.Action` constants have typed field descriptors that differ from Adventure 4.
+Regression tests cover legacy 1.21.4 click payloads and modern integer page payloads.
+Backend tests use Minecraft 26.3 (protocol 777). The shaded plugin is written to
 `build/libs/packetevents-velocity-2.14.1-SNAPSHOT.jar`.
 
 EmbeddedChannel tests cover backend/frontend isolation, per-channel state, packet rewriting,

@@ -24,12 +24,9 @@
 package net.kyori.adventure.text.serializer.legacy;
 
 import java.util.List;
-import java.util.stream.Stream;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.format.TextFormat;
-import net.kyori.examination.Examinable;
-import net.kyori.examination.ExaminableProperty;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -41,7 +38,7 @@ import org.jetbrains.annotations.Unmodifiable;
  * @since 4.14.0
  */
 @ApiStatus.NonExtendable
-public interface CharacterAndFormat extends Examinable {
+public interface CharacterAndFormat {
     /**
      * Character and format pair representing {@link NamedTextColor#BLACK}.
      *
@@ -251,12 +248,4 @@ public interface CharacterAndFormat extends Examinable {
      */
     boolean caseInsensitive();
 
-    @Override
-    default @NotNull Stream<? extends ExaminableProperty> examinableProperties() {
-        return Stream.of(
-                ExaminableProperty.of("character", this.character()),
-                ExaminableProperty.of("format", this.format()),
-                ExaminableProperty.of("caseInsensitive", this.caseInsensitive())
-        );
-    }
 }

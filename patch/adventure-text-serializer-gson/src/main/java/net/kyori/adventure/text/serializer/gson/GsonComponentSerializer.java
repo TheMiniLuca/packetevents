@@ -50,7 +50,7 @@ import org.jetbrains.annotations.Nullable;
  *
  * @since 4.0.0
  */
-public interface GsonComponentSerializer extends JSONComponentSerializer, Buildable<GsonComponentSerializer, GsonComponentSerializer.Builder> {
+public interface GsonComponentSerializer extends JSONComponentSerializer, Buildable<GsonComponentSerializer.Builder> {
     /**
      * Gets a component serializer for gson serialization and deserialization.
      *
@@ -123,7 +123,7 @@ public interface GsonComponentSerializer extends JSONComponentSerializer, Builda
      *
      * @since 4.0.0
      */
-    interface Builder extends AbstractBuilder<GsonComponentSerializer>, Buildable.Builder<GsonComponentSerializer>, JSONComponentSerializer.Builder {
+    interface Builder extends AbstractBuilder<GsonComponentSerializer>, JSONComponentSerializer.Builder {
         @Override
         @NotNull Builder options(final @NotNull OptionState flags);
 
@@ -136,24 +136,8 @@ public interface GsonComponentSerializer extends JSONComponentSerializer, Builda
          * @return this builder
          * @since 4.0.0
          */
-        @Override
         default @NotNull Builder downsampleColors() {
             return this.editOptions(features -> features.value(JSONOptions.EMIT_RGB, false));
-        }
-
-        /**
-         * Sets a serializer that will be used to interpret legacy hover event {@code value} payloads.
-         * If the serializer is {@code null}, then only {@link net.kyori.adventure.text.event.HoverEvent.Action#SHOW_TEXT}
-         * legacy hover events can be deserialized.
-         *
-         * @param serializer serializer
-         * @return this builder
-         * @since 4.0.0
-         * @deprecated for removal since 4.14.0, use {@link #legacyHoverEventSerializer(net.kyori.adventure.text.serializer.json.LegacyHoverEventSerializer)} instead
-         */
-        @Deprecated
-        default @NotNull Builder legacyHoverEventSerializer(final @Nullable LegacyHoverEventSerializer serializer) {
-            return this.legacyHoverEventSerializer((net.kyori.adventure.text.serializer.json.LegacyHoverEventSerializer) serializer);
         }
 
         @Override
@@ -169,7 +153,6 @@ public interface GsonComponentSerializer extends JSONComponentSerializer, Builda
          * @since 4.0.0
          */
         @Deprecated
-        @Override
         default @NotNull Builder emitLegacyHoverEvent() {
             return this.editOptions(b -> b.value(JSONOptions.EMIT_HOVER_EVENT_TYPE, JSONOptions.HoverEventValueMode.ALL));
         }

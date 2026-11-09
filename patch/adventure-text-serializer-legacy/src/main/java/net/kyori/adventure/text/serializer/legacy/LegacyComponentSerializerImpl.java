@@ -106,21 +106,21 @@ final class LegacyComponentSerializerImpl implements LegacyComponentSerializer {
     }
     if (legacy == this.hexCharacter && input.length() - pos >= 6) {
       return FormatCodeType.KYORI_HEX;
-    } else if (this.formats.characters.indexOf(legacy) != -1) {
+    } else if (this.formats.characters().indexOf(legacy) != -1) {
       return FormatCodeType.MOJANG_LEGACY;
     }
     return null;
   }
 
   static @Nullable LegacyFormat legacyFormat(final char character) {
-    final int index = CharacterAndFormatSet.DEFAULT.characters.indexOf(character);
+    final int index = CharacterAndFormatSet.DEFAULT.characters().indexOf(character);
     if (index != -1) {
-      final TextFormat format = CharacterAndFormatSet.DEFAULT.formats.get(index);
+      final TextFormat format = CharacterAndFormatSet.DEFAULT.formats().get(index);
       if (format instanceof NamedTextColor) {
         return new LegacyFormat((NamedTextColor) format);
       } else if (format instanceof TextDecoration) {
         return new LegacyFormat((TextDecoration) format);
-      } else if (format instanceof Reset) {
+      } else {
         return LegacyFormat.RESET;
       }
     }
@@ -138,7 +138,7 @@ final class LegacyComponentSerializerImpl implements LegacyComponentSerializer {
         return new DecodedFormat(foundFormat, parsed);
       }
     } else if (foundFormat == FormatCodeType.MOJANG_LEGACY) {
-      return new DecodedFormat(foundFormat, this.formats.formats.get(this.formats.characters.indexOf(legacy)));
+      return new DecodedFormat(foundFormat, this.formats.formats().get(this.formats.characters().indexOf(legacy)));
     } else if (foundFormat == FormatCodeType.BUNGEECORD_UNUSUAL_HEX) {
       final StringBuilder foundHex = new StringBuilder(6);
       for (int i = pos - 1; i >= pos - 11; i -= 2) {
@@ -185,16 +185,16 @@ final class LegacyComponentSerializerImpl implements LegacyComponentSerializer {
         if (!(color instanceof NamedTextColor)) {
           // if we are not using hex colours, then convert the hex colour
           // to the "nearest" possible named/standard text colour
-          format = TextColor.nearestColorTo(this.formats.colors, color);
+          format = TextColor.nearestColorTo(this.formats.colors(), color);
         }
       }
     }
-    final int index = this.formats.formats.indexOf(format);
+    final int index = this.formats.formats().indexOf(format);
     if (index == -1) {
       // this format was removed from the formats list
       return null;
     }
-    return Character.toString(this.formats.characters.charAt(index));
+    return Character.toString(this.formats.characters().charAt(index));
   }
 
   private TextComponent extractUrl(final TextComponent component) {
@@ -281,7 +281,7 @@ final class LegacyComponentSerializerImpl implements LegacyComponentSerializer {
     } else if (format instanceof TextDecoration) {
       builder.decoration((TextDecoration) format, TextDecoration.State.TRUE);
       return false;
-    } else if (format == null || format instanceof Reset) { // packetevents patch
+    } else if (format == null) { // packetevents patch
       return true;
     }
     throw new IllegalArgumentException(String.format("unknown format '%s'", format.getClass()));

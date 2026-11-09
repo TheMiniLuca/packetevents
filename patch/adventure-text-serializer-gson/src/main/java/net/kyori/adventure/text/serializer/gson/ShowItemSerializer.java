@@ -89,7 +89,7 @@ final class ShowItemSerializer extends TypeAdapter<HoverEvent.ShowItem> {
                     if (BackwardCompatUtil.IS_4_10_0_OR_NEWER) {
                         nbt = BinaryTagHolder.binaryTagHolder(in.nextString());
                     } else {
-                        nbt = BinaryTagHolder.of(in.nextString());
+                        nbt = BinaryTagHolder.binaryTagHolder(in.nextString());
                     }
                     // packetevents patch end
                 } else if (token == JsonToken.BOOLEAN) {
@@ -97,7 +97,7 @@ final class ShowItemSerializer extends TypeAdapter<HoverEvent.ShowItem> {
                     if (BackwardCompatUtil.IS_4_10_0_OR_NEWER) {
                         nbt = BinaryTagHolder.binaryTagHolder(String.valueOf(in.nextBoolean()));
                     } else {
-                        nbt = BinaryTagHolder.of(String.valueOf(in.nextBoolean()));
+                        nbt = BinaryTagHolder.binaryTagHolder(String.valueOf(in.nextBoolean()));
                     }
                     // packetevents patch end
                 } else if (token == JsonToken.NULL) {

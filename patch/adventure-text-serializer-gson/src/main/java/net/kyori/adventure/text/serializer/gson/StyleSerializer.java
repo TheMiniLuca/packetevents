@@ -248,7 +248,7 @@ final class StyleSerializer extends TypeAdapter<Style> {
                                 if (BackwardCompatUtil.IS_4_23_0_OR_NEWER) {
                                     style.clickEvent(ClickEvent.custom(key, BinaryTagHolder.binaryTagHolder(value)));
                                 } else {
-                                    style.clickEvent(ClickEvent.custom(key, value));
+                                    style.clickEvent(ClickEvent.custom(key, value == null ? null : BinaryTagHolder.binaryTagHolder(value)));
                                 }
                             }
                             break;
@@ -420,7 +420,7 @@ final class StyleSerializer extends TypeAdapter<Style> {
                 this.gson.toJson(action, SerializerFactory.CLICK_ACTION_TYPE, out);
 
                 if (action.readable()) {
-                    final Object payload = BackwardCompatUtil.IS_4_22_0_OR_NEWER ? clickEvent.payload() : clickEvent.value(); // packetevents patch
+                    final Object payload = BackwardCompatUtil.IS_4_22_0_OR_NEWER ? clickEvent.payload() : ((ClickEvent.Payload.Text) clickEvent.payload()).value(); // packetevents patch
 
                     if (payload instanceof String || payload instanceof ClickEvent.Payload.Text) { // packetevents patch
                         // packetevents patch start
@@ -455,7 +455,7 @@ final class StyleSerializer extends TypeAdapter<Style> {
                             }
                         } else {
                             out.name(CLICK_EVENT_PAYLOAD);
-                            out.value(customPayload.data());
+                            out.value(customPayload.nbt() == null ? null : customPayload.nbt().string());
                         }
                         // packetevents patch end
                     } else if (payload instanceof ClickEvent.Payload.Int) {
@@ -483,7 +483,7 @@ final class StyleSerializer extends TypeAdapter<Style> {
                 if (BackwardCompatUtil.IS_4_22_0_OR_NEWER) {
                     payloadValue = ((ClickEvent.Payload.Text) clickEvent.payload()).value();
                 } else {
-                    payloadValue = clickEvent.value();
+                    payloadValue = ((ClickEvent.Payload.Text) clickEvent.payload()).value();
                 }
                 // packetevents patch end
                 if ("open_url".equals(action.toString()) && this.emitClickUrlHttps && !StyleSerializer.isValidUrlScheme(payloadValue)) { // packetevents patch
